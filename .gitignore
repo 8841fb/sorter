@@ -169,5 +169,5 @@ dist
 .pnp.\*
 
 # Misc
-output.txt
+output/
 input.txt
