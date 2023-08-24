@@ -1,7 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
 import chalk from "chalk";
-import Bun from "bun";
 
 interface YearFileCount {
 	[year: string]: number;
@@ -28,7 +27,7 @@ class TokenSorter {
 		return outputDir;
 	}
 
-	private async processToken(token: string) {
+	private processToken(token: string) {
 		if (this.processedTokens.has(token)) {
 			return;
 		}
@@ -54,11 +53,14 @@ class TokenSorter {
 
 			const dateObj = new Date(creationdate_unix);
 			const year = dateObj.getFullYear().toString();
+			const month = (dateObj.getMonth() + 1).toString().padStart(2, "0");
+			const day = this.sortOptions.sortByDay
+				? dateObj.getDate().toString().padStart(2, "0")
+				: "";
 
 			const yearFilePath = path.join(this.outputDir, `${year}.txt`);
-			await this.createFileIfNotExists(yearFilePath);
-			const yearBunFile = Bun.file(yearFilePath);
-			await Bun.write(yearBunFile, fullToken + "\n");
+			this.createFileIfNotExists(yearFilePath);
+			fs.appendFileSync(yearFilePath, fullToken + "\n");
 
 			if (this.sortOptions.sortByDay) {
 				if (!this.yearFileCount[year]) {
@@ -70,50 +72,45 @@ class TokenSorter {
 					this.outputDir,
 					`${year} #${yearCount}.txt`,
 				);
-				await this.createFileIfNotExists(yearCountFilePath);
-				const yearCountBunFile = Bun.file(yearCountFilePath);
-				await Bun.write(yearCountBunFile, fullToken + "\n");
+				this.createFileIfNotExists(yearCountFilePath);
+				fs.appendFileSync(yearCountFilePath, fullToken + "\n");
 			}
 		} catch (error) {
 			this.handleTokenError(token, error);
 		}
 	}
 
-	private async handleTokenError(token: string, error: any) {
+	private handleTokenError(token: string, error: any) {
 		const failedFilePath = path.join(this.outputDir, "failed.txt");
-		await this.createFileIfNotExists(failedFilePath);
-		const failedBunFile = Bun.file(failedFilePath);
-		await Bun.write(failedBunFile, token + "\n");
+		this.createFileIfNotExists(failedFilePath);
+		fs.appendFileSync(failedFilePath, token + "\n");
 		console.error(chalk.red(`Error - ${token} - ${error}`));
 	}
 
-	private async createFileIfNotExists(filePath: string) {
+	private createFileIfNotExists(filePath: string) {
 		const directory = path.dirname(filePath);
-
 		if (!fs.existsSync(directory)) {
 			fs.mkdirSync(directory, { recursive: true });
 		}
-
 		if (!fs.existsSync(filePath)) {
-			const bunFile = Bun.file(filePath);
-			await Bun.write(bunFile, "");
+			fs.writeFileSync(filePath, "");
 		}
 	}
 
-	public async sortTokens(tokens: string[]) {
+	public sortTokens(tokens: string[]) {
 		const startTime = Date.now();
 		console.log(chalk.yellow("Starting..."));
 
-		await this.createOutputDirectory();
+		this.createOutputDirectory();
 
-		for (let i = 0; i < tokens.length; i++) {
+		tokens.forEach((token, i) => {
 			const percentDone = Math.floor((i / tokens.length) * 100);
 			if (percentDone !== Math.floor((i - 1) / tokens.length) * 100) {
 				console.log(chalk.cyan(`${percentDone}% done...`));
 			}
 
-			await this.processToken(tokens[i]);
-		}
+			this.processToken(token);
+		});
 
 		console.log(
 			chalk.green(
@@ -125,17 +122,16 @@ class TokenSorter {
 	}
 }
 
-async function sortTokens() {
+function sortTokens() {
 	const sortOptions = {
 		sortByDay: false,
 		limitTokens: false,
 	};
 
-	const inputBunFile = Bun.file("input.txt");
-	const tokens: string[] = (await inputBunFile.text()).split("\n");
+	const tokens: string[] = fs.readFileSync("input.txt", "utf-8").split("\n");
 
 	const tokenSorter = new TokenSorter(sortOptions);
-	await tokenSorter.sortTokens(tokens);
+	tokenSorter.sortTokens(tokens);
 }
 
 sortTokens();
